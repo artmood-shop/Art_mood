@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Art Mood — فروشگاه</title>
+<style>
+:root{--bg:#f7f5f1;--ink:#20201e;--muted:#77746d;--card:#fff;--line:#e6e1d8;--accent:#a47755}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Tahoma,Arial,sans-serif}
+.wrap{max-width:1100px;margin:auto;padding:0 22px}header{border-bottom:1px solid var(--line);background:#f7f5f1eF}
+.nav{height:72px;display:flex;align-items:center;justify-content:space-between}.logo{font-size:22px;font-weight:800}.logo span{color:var(--accent)}
+main{padding:50px 0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.product,.box{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px}.pic{height:240px;border-radius:13px;margin-bottom:15px}.p1{background:linear-gradient(130deg,#dfd2bf,#765d4a 55%,#1d1b1a)}.p2{background:linear-gradient(45deg,#b6c0b4,#eee8df 50%,#8a735d)}.p3{background:linear-gradient(145deg,#232323,#b58a63 50%,#e8ddd0)}
+button{border:0;border-radius:10px;padding:12px 16px;cursor:pointer;background:var(--ink);color:#fff}.add{width:100%;margin-top:15px}.cartbar{margin:28px 0;padding:18px;background:#ebe6dc;border-radius:16px;display:flex;justify-content:space-between;align-items:center}
+form{display:grid;gap:12px}input,textarea{width:100%;padding:13px;border:1px solid var(--line);border-radius:10px;background:#fff;font:inherit}textarea{min-height:90px}
+.hidden{display:none}.items{display:grid;gap:8px;margin-bottom:18px}.row{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:10px 0}.msg{text-align:center;padding:55px 10px}.success{background:#edf5ed}.failed{background:#f8eded}
+@media(max-width:750px){.grid{grid-template-columns:1fr}.cartbar{gap:10px;align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<header><div class="wrap nav"><div class="logo">Art <span>Mood</span></div><div>فروشگاه تابلوهای دست‌ساز</div></div></header>
+<main class="wrap">
+<section id="shop">
+<h1>آثار Art Mood</h1><p>هر تابلو، یک حس.</p>
+<div class="grid" id="products"></div>
+<div class="cartbar"><div><b>سبد خرید:</b> <span id="count">۰</span> اثر — <span id="sum">۰</span> تومان</div><button onclick="showCheckout()">ادامه و ثبت سفارش</button></div>
+</section>
+
+<section id="checkout" class="hidden">
+<div class="box"><h2>ثبت سفارش</h2><div class="items" id="summary"></div>
+<form id="orderForm">
+<input name="name" placeholder="نام و نام خانوادگی" required>
+<input name="phone" placeholder="شماره موبایل" required>
+<input name="email" type="email" placeholder="ایمیل (اختیاری)">
+<textarea name="address" placeholder="آدرس کامل برای ارسال" required></textarea>
+<button type="submit">ادامه به پرداخت امن</button>
+</form></div>
+</section>
+
+<section id="result" class="hidden"><div class="box msg" id="resultBox"></div></section>
+</main>
+<script>
+const products=[
+{id:"quiet-shapes",name:"Quiet Shapes",price:1850000,desc:"تابلو مینیمال دست‌ساز",cls:"p1"},
+{id:"soft-morning",name:"Soft Morning",price:2100000,desc:"ترکیب رنگ آرام و مدرن",cls:"p2"},
+{id:"night-muse",name:"Night Muse",price:2350000,desc:"اثر انتزاعی معاصر",cls:"p3"}];
+let cart=JSON.parse(localStorage.getItem("artmood-cart")||"[]");
+const fa=n=>new Intl.NumberFormat("fa-IR").format(n);
+function save(){localStorage.setItem("artmood-cart",JSON.stringify(cart))}
+function render(){
+document.getElementById("products").innerHTML=products.map(p=>`<article class="product"><div class="pic ${p.cls}"></div><b>${p.name}</b><p>${p.desc}</p><b>${fa(p.price)} تومان</b><button class="add" onclick="add('${p.id}')">افزودن به سبد</button></article>`).join("");
+document.getElementById("count").textContent=fa(cart.reduce((s,x)=>s+x.qty,0));
+document.getElementById("sum").textContent=fa(cart.reduce((s,x)=>s+x.price*x.qty,0));
+}
+function add(id){const p=products.find(x=>x.id===id), old=cart.find(x=>x.id===id);if(old)old.qty++;else cart.push({...p,qty:1});save();render()}
+function showCheckout(){
+if(!cart.length)return alert("سبد خرید خالی است.");
+document.getElementById("shop").classList.add("hidden");document.getElementById("checkout").classList.remove("hidden");
+document.getElementById("summary").innerHTML=cart.map(x=>`<div class="row"><span>${x.name} × ${x.qty}</span><b>${fa(x.price*x.qty)} تومان</b></div>`).join("");
+}
+document.getElementById("orderForm").onsubmit=async e=>{
+e.preventDefault();const f=new FormData(e.target);const customer=Object.fromEntries(f.entries());
+const items=cart.map(x=>({id:x.id,qty:x.qty}));
+const r=await fetch("/api/orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items,customer})});
+const data=await r.json();if(!r.ok)return alert(data.error||"خطا");
+if(data.paymentUrl){location.href=data.paymentUrl}else{alert(data.message+" Merchant ID را در .env تنظیم کن.");}
+};
+function result(){
+const q=new URLSearchParams(location.search), payment=q.get("payment");if(!payment)return;
+document.getElementById("shop").classList.add("hidden");document.getElementById("checkout").classList.add("hidden");document.getElementById("result").classList.remove("hidden");
+const box=document.getElementById("resultBox");
+if(payment==="success"){box.className="box msg success";box.innerHTML=`<h2>پرداخت موفق بود 🎉</h2><p>سفارش ${q.get("order")||""} با موفقیت ثبت شد.</p><p>شماره پیگیری: <b>${q.get("ref")||"—"}</b></p><button onclick="location.href='/'">بازگشت به فروشگاه</button>`;localStorage.removeItem("artmood-cart")}
+else{box.className="box msg failed";box.innerHTML=`<h2>پرداخت ناموفق بود</h2><p>پرداخت لغو شد یا تأیید تراکنش انجام نشد.</p><button onclick="location.href='/'">بازگشت و تلاش دوباره</button>`}
+}
+render();result();
+</script>
+</body></html>
